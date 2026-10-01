@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -8,12 +9,17 @@ from fastapi.responses import JSONResponse
 from fusion_siem.auth import verify_ingest_token
 from fusion_siem.config import Settings
 from fusion_siem.pipeline import IngestPipeline
+from fusion_siem.ui import build_ui_router
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    env_file: Path | None = None,
+) -> FastAPI:
     settings = settings or Settings()
     pipeline = IngestPipeline(settings)
-    app = FastAPI(title="fusion-siem-bridge", version="0.1.0")
+    app = FastAPI(title="Fusion (XDR) SIEM Bridge", version="0.1.0")
+    app.include_router(build_ui_router(settings, env_file or Path(".env")))
 
     @app.get("/health")
     def health() -> dict[str, str]:

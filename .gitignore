@@ -1,13 +1,23 @@
-.venv/
-.superpowers/
-__pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
+# Secrets and local runtime
 .env
+.env.*
+!.env.example
 data/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
+.coverage.*
 htmlcov/
+
+# Local tooling
+.superpowers/
+.DS_Store

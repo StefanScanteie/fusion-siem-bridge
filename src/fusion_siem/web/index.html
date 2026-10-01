@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fusion (XDR) SIEM Bridge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wght@400;600&family=Zalando+Sans+Expanded:wght@400;600&family=Zalando+Sans+SemiExpanded:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/static/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div>
+        <p class="eyebrow">Fusion (XDR) SIEM Bridge</p>
+        <h1>Middleware</h1>
+      </div>
+      <button type="button" id="theme-toggle" class="theme" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-status" aria-selected="true" aria-controls="panel-status">Status</button>
+      <button type="button" role="tab" id="tab-settings" aria-selected="false" aria-controls="panel-settings">Settings</button>
+    </nav>
+
+    <main>
+      <section id="panel-status" role="tabpanel" aria-labelledby="tab-status">
+        <div class="cards">
+          <article class="stat">
+            <p class="label">Ingest</p>
+            <p id="ingest-live" class="value live">Live</p>
+          </article>
+          <article class="stat">
+            <p class="label">Outbox</p>
+            <p id="outbox-lines" class="value">0</p>
+          </article>
+          <article class="stat">
+            <p class="label">Last ingest</p>
+            <p id="last-ingest" class="value">never</p>
+          </article>
+        </div>
+        <label for="webhook-url">Generic Webhook URL</label>
+        <div class="copy-row">
+          <input id="webhook-url" readonly>
+          <button type="button" id="copy-url">Copy</button>
+        </div>
+        <p class="note">This UI is localhost-only. Fusion posts to <code>/v1/ingest</code>. If Fusion cannot reach 127.0.0.1, set public host on Settings.</p>
+      </section>
+
+      <section id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <form id="settings-form">
+          <label for="ingest-token">Ingest token</label>
+          <input id="ingest-token" name="ingest_token" type="password" autocomplete="off" placeholder="leave blank to keep">
+
+          <label for="data-dir">Data directory</label>
+          <input id="data-dir" name="data_dir" required>
+
+          <label for="forward-url">Forward URL</label>
+          <input id="forward-url" name="forward_url" placeholder="optional HTTPS collector">
+
+          <label for="forward-token">Forward token</label>
+          <input id="forward-token" name="forward_token" type="password" autocomplete="off" placeholder="leave blank to keep">
+
+          <div class="grid">
+            <div>
+              <label for="bind-host">Bind host</label>
+              <input id="bind-host" name="host" required>
+            </div>
+            <div>
+              <label for="bind-port">Port</label>
+              <input id="bind-port" name="port" type="number" min="1" max="65535" required>
+            </div>
+          </div>
+
+          <label for="public-host">Public host</label>
+          <input id="public-host" name="public_host" placeholder="DNS name Fusion can reach">
+
+          <button type="submit">Save .env</button>
+          <p id="save-status" class="note" role="status"></p>
+        </form>
+        <p class="disclaimer">Disclaimer: This software is provided free of charge, &quot;as is,&quot; and without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and non-infringement. This software is not officially supported by Sophos, and Sophos has no obligation to provide maintenance, updates, or support for it. You are responsible for reviewing and testing the software before using it in any environment. Use of this software is at your own risk. In no event will Sophos be liable for any damages, including but not limited to data loss, system downtime, security incidents, or business interruption, arising from the use of or inability to use this software.</p>
+      </section>
+    </main>
+  </div>
+  <script src="/ui/static/app.js"></script>
+</body>
+</html>

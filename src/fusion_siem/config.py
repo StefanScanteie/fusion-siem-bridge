@@ -17,3 +17,4 @@ class Settings(BaseSettings):
     forward_token: str | None = None
     host: str = "0.0.0.0"
     port: int = 8080
+    public_host: str | None = None

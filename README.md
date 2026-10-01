@@ -1,8 +1,8 @@
-# fusion-siem-bridge
+# Fusion (XDR) SIEM Bridge
 
 Middleware plus Fusion Automations playbooks that export **detections**, **related events**, and **cases** from Sophos Fusion (Sophos XDR powered by Secureworks) to a SIEM.
 
-Fusion playbooks can only POST HTTPS. They cannot talk Splunk HEC, Sentinel, or syslog directly. This collector is the “any SIEM” side: it accepts the Fusion webhook JSON those playbooks POST, normalizes it to a stable `fusion-siem.v1` envelope, writes that envelope locally, and optionally forwards it to another HTTP collector.
+The repo is `fusion-siem-bridge`; the CLI is `fusion-siem`. Fusion playbooks can only POST HTTPS. They cannot talk Splunk HEC, Sentinel, or syslog directly. This middleware is the “any SIEM” side: it accepts the Fusion webhook JSON those playbooks POST, normalizes it to a stable `fusion-siem.v1` envelope, writes that envelope locally, and optionally forwards it to another HTTP collector.
 
 ```
 Fusion Automations
@@ -18,7 +18,7 @@ fusion-siem-bridge
 SDK backfill (taegis-sdk-python) ---- same /v1/ingest ----^
 ```
 
-This is **not** a Data Lake firehose. The slice is detections (Alert2), events linked to those detections or cases, and cases. Downstream SIEM mapping belongs in this collector, not in a one-off Fusion playbook per SIEM.
+This is **not** a Data Lake firehose. The slice is detections (Alert2), events linked to those detections or cases, and cases. Downstream SIEM mapping belongs in this middleware, not in a one-off Fusion playbook per SIEM.
 
 See [playbooks/INSTALL.md](playbooks/INSTALL.md) for the operator walkthrough and [playbooks/CONTRACT.md](playbooks/CONTRACT.md) for the JSON envelope.
 
@@ -76,7 +76,10 @@ cp .env.example .env
 fusion-siem serve
 ```
 
-Default bind is `0.0.0.0:8080`. Health check: `GET /health`.
+Default bind is `0.0.0.0:8080`. Health check: `GET /health`. On the same
+machine, open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) for the
+Status / Settings UI (see [Local UI](#local-ui)). Fusion still posts to
+`/v1/ingest`.
 
 In another shell, POST a sample envelope:
 
@@ -98,21 +101,44 @@ fusion-siem post-file examples/taegis-send-to-webhook-case.json \
   --url 'http://127.0.0.1:8080/v1/ingest?token=the-same-token'
 ```
 
-`fusion-siem post-file` still sends `Authorization: Bearer`. The collector accepts **either** the query token **or** Bearer. Generic Webhook from Fusion only sends the query token.
+`fusion-siem post-file` still sends `Authorization: Bearer`. The middleware accepts **either** the query token **or** Bearer. Generic Webhook from Fusion only sends the query token.
+
+## Local UI
+
+On the same machine as `fusion-siem serve`, open
+[http://127.0.0.1:8080/](http://127.0.0.1:8080/). The page is loopback-only
+(`127.0.0.1` / `::1`); any other client gets `403`. There is no login.
+`GET /health` and `POST /v1/ingest` stay reachable on the bind address.
+
+The header is **Fusion (XDR) SIEM Bridge** / **Middleware**.
+
+| Tab | Shows |
+| --- | --- |
+| Status | Ingest live/down, outbox line count, last ingest time, copyable Generic Webhook URL |
+| Settings | Ingest token, data directory, forward URL/token, bind host/port, public host |
+
+The copied webhook URL uses `FUSION_SIEM_PUBLIC_HOST` when set, otherwise
+`127.0.0.1` (never `0.0.0.0`). If Fusion cannot reach loopback, set public host
+to a DNS name Fusion can call.
+
+**Save .env** upserts `FUSION_SIEM_*` keys and leaves other lines (including
+`CLIENT_ID`) alone. Blank token fields keep the current secrets. The process
+does not hot-reload: restart `fusion-siem serve` before a new ingest token is
+honored. Light / Dark is stored in the browser, not in `.env`.
 
 ## Fusion connection
 
 In Fusion: **Automations → Connections → Generic Webhook**.
 
 ```
-https://<collector-host>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
+https://<public-host>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
 ```
 
 `Taegis.Webhook.post` does **not** send an `Authorization` header. The connection Test button is inactive (note in the webhook PDF). Do not create a `FusionSIEM.Webhook` connector.
 
-The collector host must be reachable from Fusion (public HTTPS or a reverse proxy Fusion can call).
+The middleware host must be reachable from Fusion (public HTTPS or a reverse proxy Fusion can call). Copy the URL from Status after setting public host if Fusion cannot use `127.0.0.1`.
 
-## What the collector accepts
+## What the middleware accepts
 
 `POST /v1/ingest` is untyped JSON. The parser then maps every supported inbound shape to the same envelope.
 
@@ -143,7 +169,7 @@ Idempotency key is `{tenant_id}:{datastream}:{id}`. Case updates from Fusion reu
 
 Written to `data/outbox.jsonl` and, if configured, POSTed to `FUSION_SIEM_FORWARD_URL`.
 
-Detection severity stays on the Fusion GraphQL `0.0`–`1.0` scale. Case severity and priority stay Fusion case strings (`High`, `Critical`). Do not convert either to a SIEM integer in this collector until a named adapter does it.
+Detection severity stays on the Fusion GraphQL `0.0`–`1.0` scale. Case severity and priority stay Fusion case strings (`High`, `Critical`). Do not convert either to a SIEM integer in this middleware until a named adapter does it.
 
 **Detection**
 
@@ -237,11 +263,12 @@ Copy [.env.example](.env.example). Variables use the `FUSION_SIEM_` prefix.
 | `FUSION_SIEM_FORWARD_URL` | Optional HTTP collector for the canonical envelope |
 | `FUSION_SIEM_FORWARD_TOKEN` | Bearer token for `FORWARD_URL` |
 | `FUSION_SIEM_HOST` / `FUSION_SIEM_PORT` | Bind address (default `0.0.0.0:8080`) |
+| `FUSION_SIEM_PUBLIC_HOST` | Hostname in the Status page webhook URL (optional; never `0.0.0.0`) |
 | `FUSION_SIEM_INGEST_URL` | CLI default for `post-file` / `backfill` |
 | `FUSION_SIEM_CONSOLE_URL` | Console base used when backfill builds alert/case URLs |
 | `CLIENT_ID` / `CLIENT_SECRET` | Taegis SDK auth for backfill only |
 
-Until `FUSION_SIEM_FORWARD_URL` is set, events stay in `data/outbox.jsonl`. That file is the adapter boundary: Splunk HEC, Sentinel, syslog, or another HTTP SIEM should consume the envelope, not the raw Taegis trigger.
+The Settings form writes the `FUSION_SIEM_*` rows above. Until `FUSION_SIEM_FORWARD_URL` is set, events stay in `data/outbox.jsonl`. That file is the adapter boundary: Splunk HEC, Sentinel, syslog, or another HTTP SIEM should consume the envelope, not the raw Taegis trigger.
 
 ## Tests
 
@@ -255,9 +282,16 @@ pytest
 playbooks/     Fusion YAML, install notes, payload contract
 examples/      Canonical and native webhook JSON
 src/fusion_siem/
-  app.py       FastAPI /v1/ingest and /health
-  envelope.py  Taegis shapes → fusion-siem.v1
+  app.py       FastAPI /v1/ingest, /health, localhost UI
+  ui.py        loopback gate, /ui/status, /ui/settings
+  envfile.py   Settings form upserts `.env`
+  web/         Status / Settings page (Light / Dark)
+  envelope.py  Fusion webhook JSON → fusion-siem.v1
   pipeline.py  idempotency, JSONL, optional HTTPS forward
   backfill.py  SDK detection/case mapping
 tests/
 ```
+
+## Disclaimer
+
+Disclaimer: This software is provided free of charge, "as is," and without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and non-infringement. This software is not officially supported by Sophos, and Sophos has no obligation to provide maintenance, updates, or support for it. You are responsible for reviewing and testing the software before using it in any environment. Use of this software is at your own risk. In no event will Sophos be liable for any damages, including but not limited to data loss, system downtime, security incidents, or business interruption, arising from the use of or inability to use this software.
