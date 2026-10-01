@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from fusion_siem.adapters.errors import DestinationNotConfigured, DestinationSendError
 from fusion_siem.auth import verify_ingest_token
 from fusion_siem.config import Settings
 from fusion_siem.pipeline import IngestPipeline
@@ -15,9 +17,10 @@ from fusion_siem.ui import build_ui_router
 def create_app(
     settings: Settings | None = None,
     env_file: Path | None = None,
+    http_client: httpx.Client | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
-    pipeline = IngestPipeline(settings)
+    pipeline = IngestPipeline(settings, http_client=http_client)
     app = FastAPI(title="Fusion (XDR) SIEM Bridge", version="0.1.0")
     app.include_router(build_ui_router(settings, env_file or Path(".env")))
 
@@ -43,6 +46,10 @@ def create_app(
         payload: dict[str, Any] = await request.json()
         try:
             result = pipeline.ingest(payload)
+        except DestinationNotConfigured as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except DestinationSendError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return JSONResponse(status_code=202, content=result)

@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from fusion_siem.adapters.destination import effective_destination
 from fusion_siem.config import Settings
 from fusion_siem.envfile import upsert_env
 
@@ -74,6 +75,15 @@ class SettingsUpdate(BaseModel):
     host: str = "0.0.0.0"
     port: int = Field(default=8080, ge=1, le=65535)
     public_host: str = ""
+    destination: str = "none"
+    splunk_hec_url: str = ""
+    splunk_hec_token: str = ""
+    splunk_index: str = ""
+    splunk_sourcetype: str = "fusion_siem:v1"
+    qradar_host: str = ""
+    qradar_port: int = Field(default=514, ge=1, le=65535)
+    rapid7_url: str = ""
+    rapid7_token: str = ""
 
 
 def build_ui_router(settings: Settings, env_file: Path) -> APIRouter:
@@ -114,6 +124,15 @@ def build_ui_router(settings: Settings, env_file: Path) -> APIRouter:
             "host": settings.host,
             "port": settings.port,
             "public_host": settings.public_host or "",
+            "destination": effective_destination(settings),
+            "splunk_hec_url": settings.splunk_hec_url or "",
+            "splunk_hec_token": mask_secret(settings.splunk_hec_token),
+            "splunk_index": settings.splunk_index or "",
+            "splunk_sourcetype": settings.splunk_sourcetype or "fusion_siem:v1",
+            "qradar_host": settings.qradar_host or "",
+            "qradar_port": settings.qradar_port,
+            "rapid7_url": settings.rapid7_url or "",
+            "rapid7_token": mask_secret(settings.rapid7_token),
         }
 
     @router.put("/ui/settings")
@@ -132,6 +151,21 @@ def build_ui_router(settings: Settings, env_file: Path) -> APIRouter:
                 body.forward_token.strip() or (settings.forward_token or "")
             ),
             "FUSION_SIEM_PUBLIC_HOST": body.public_host.strip(),
+            "FUSION_SIEM_DESTINATION": body.destination.strip().lower() or "none",
+            "FUSION_SIEM_SPLUNK_HEC_URL": body.splunk_hec_url.strip(),
+            "FUSION_SIEM_SPLUNK_HEC_TOKEN": (
+                body.splunk_hec_token.strip() or (settings.splunk_hec_token or "")
+            ),
+            "FUSION_SIEM_SPLUNK_INDEX": body.splunk_index.strip(),
+            "FUSION_SIEM_SPLUNK_SOURCETYPE": (
+                body.splunk_sourcetype.strip() or "fusion_siem:v1"
+            ),
+            "FUSION_SIEM_QRADAR_HOST": body.qradar_host.strip(),
+            "FUSION_SIEM_QRADAR_PORT": str(body.qradar_port),
+            "FUSION_SIEM_RAPID7_URL": body.rapid7_url.strip(),
+            "FUSION_SIEM_RAPID7_TOKEN": (
+                body.rapid7_token.strip() or (settings.rapid7_token or "")
+            ),
         }
         try:
             upsert_env(env_file, values)

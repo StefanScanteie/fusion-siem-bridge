@@ -115,7 +115,7 @@ The header is **Fusion (XDR) SIEM Bridge** / **Middleware**.
 | Tab | Shows |
 | --- | --- |
 | Status | Ingest live/down, outbox line count, last ingest time, copyable Generic Webhook URL |
-| Settings | Ingest token, data directory, forward URL/token, bind host/port, public host |
+| Settings | Destination (None / Splunk / QRadar / Rapid7 / Any) and that destination’s fields; ingest token; data directory; bind host/port; public host |
 
 The copied webhook URL uses `FUSION_SIEM_PUBLIC_HOST` when set, otherwise
 `127.0.0.1` (never `0.0.0.0`). If Fusion cannot reach loopback, set public host
@@ -125,6 +125,18 @@ to a DNS name Fusion can call.
 `CLIENT_ID`) alone. Blank token fields keep the current secrets. The process
 does not hot-reload: restart `fusion-siem serve` before a new ingest token is
 honored. Light / Dark is stored in the browser, not in `.env`.
+
+Pick **one** destination. After JSONL write, ingest forwards that envelope:
+
+| Destination | Protocol |
+| --- | --- |
+| None | JSONL only |
+| Splunk | HTTP Event Collector (`Authorization: Splunk`) |
+| QRadar | TCP syslog LEEF 2.0. TLS is currently not supported. |
+| Rapid7 | InsightIDR custom-log webhook (`X-Api-Key`) |
+| Any | Generic HTTPS JSON (Bearer), same as today’s forward URL |
+
+If the SIEM is down, ingest returns **502** and does not mark the event seen (Fusion may retry). If the destination is selected but missing URL/host/token, ingest returns **503** and does not write JSONL. Unset `FUSION_SIEM_DESTINATION` with `FORWARD_URL` set still behaves as Any.
 
 ## Fusion connection
 
@@ -157,7 +169,7 @@ Auth:
 | Fusion Generic Webhook | `?token=` on the URL |
 | `fusion-siem post-file` / `backfill` | `Authorization: Bearer` (query token also works) |
 
-Missing/wrong token → `401`. Unrecognized body → `422`. Success and duplicates → `202`.
+Missing/wrong token → `401`. Unrecognized body → `422`. Success and duplicates → `202`. Destination misconfigured → `503`. SIEM send failed → `502`.
 
 ```json
 { "idempotency_key": "48454:detection:alert://...", "duplicate": false }
@@ -260,15 +272,19 @@ Copy [.env.example](.env.example). Variables use the `FUSION_SIEM_` prefix.
 | --- | --- |
 | `FUSION_SIEM_INGEST_TOKEN` | Shared secret for `/v1/ingest` (query and/or Bearer) |
 | `FUSION_SIEM_DATA_DIR` | Outbox and idempotency store (default `data`) |
-| `FUSION_SIEM_FORWARD_URL` | Optional HTTP collector for the canonical envelope |
-| `FUSION_SIEM_FORWARD_TOKEN` | Bearer token for `FORWARD_URL` |
+| `FUSION_SIEM_DESTINATION` | `none`, `splunk`, `qradar`, `rapid7`, or `any` |
+| `FUSION_SIEM_SPLUNK_HEC_URL` / `_TOKEN` / `_INDEX` / `_SOURCETYPE` | Splunk HEC (sourcetype default `fusion_siem:v1`) |
+| `FUSION_SIEM_QRADAR_HOST` / `_PORT` | QRadar TCP syslog LEEF (port default `514`). TLS is currently not supported. |
+| `FUSION_SIEM_RAPID7_URL` / `_TOKEN` | Rapid7 InsightIDR custom-log webhook |
+| `FUSION_SIEM_FORWARD_URL` | Any: HTTPS collector for the canonical envelope |
+| `FUSION_SIEM_FORWARD_TOKEN` | Bearer token for Any |
 | `FUSION_SIEM_HOST` / `FUSION_SIEM_PORT` | Bind address (default `0.0.0.0:8080`) |
 | `FUSION_SIEM_PUBLIC_HOST` | Hostname in the Status page webhook URL (optional; never `0.0.0.0`) |
 | `FUSION_SIEM_INGEST_URL` | CLI default for `post-file` / `backfill` |
 | `FUSION_SIEM_CONSOLE_URL` | Console base used when backfill builds alert/case URLs |
 | `CLIENT_ID` / `CLIENT_SECRET` | Taegis SDK auth for backfill only |
 
-The Settings form writes the `FUSION_SIEM_*` rows above. Until `FUSION_SIEM_FORWARD_URL` is set, events stay in `data/outbox.jsonl`. That file is the adapter boundary: Splunk HEC, Sentinel, syslog, or another HTTP SIEM should consume the envelope, not the raw Taegis trigger.
+The Settings form writes the `FUSION_SIEM_*` rows above. Events always land in `data/outbox.jsonl`. Named adapters then wrap that envelope for Splunk HEC, QRadar LEEF, Rapid7, or Any. Microsoft Sentinel is not in this slice.
 
 ## Tests
 
@@ -287,7 +303,8 @@ src/fusion_siem/
   envfile.py   Settings form upserts `.env`
   web/         Status / Settings page (Light / Dark)
   envelope.py  Fusion webhook JSON → fusion-siem.v1
-  pipeline.py  idempotency, JSONL, optional HTTPS forward
+  pipeline.py  idempotency, JSONL, one SIEM adapter
+  adapters/    jsonl, Splunk HEC, QRadar LEEF, Rapid7, HTTPS Any
   backfill.py  SDK detection/case mapping
 tests/
 ```

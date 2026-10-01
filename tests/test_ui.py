@@ -103,6 +103,56 @@ def test_ui_settings_masks_token(tmp_path):
     assert "test-token" not in str(body)
     assert body["ingest_token"].endswith("oken")
     assert "•" in body["ingest_token"] or "*" in body["ingest_token"]
+    assert body["destination"] == "none"
+
+
+def test_ui_settings_destination_defaults_to_any_when_forward_url(tmp_path):
+    body = _loopback(tmp_path, forward_url="https://siem.example/collector").get("/ui/settings").json()
+    assert body["destination"] == "any"
+
+
+def test_ui_home_has_destination_select(tmp_path):
+    html = _loopback(tmp_path).get("/").text
+    assert 'id="destination"' in html
+    assert ">Splunk</option>" in html
+    assert ">QRadar</option>" in html
+    assert ">Rapid7</option>" in html
+    assert ">Any</option>" in html
+
+
+def test_ui_settings_put_writes_splunk_destination(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "FUSION_SIEM_INGEST_TOKEN=test-token\n"
+        "FUSION_SIEM_QRADAR_HOST=qradar.example\n",
+        encoding="utf-8",
+    )
+    client = TestClient(
+        _app(tmp_path, env_file=env_file, destination="qradar", qradar_host="qradar.example"),
+        client=("127.0.0.1", 50000),
+    )
+    put = client.put(
+        "/ui/settings",
+        json={
+            "ingest_token": "",
+            "data_dir": str(tmp_path),
+            "host": "0.0.0.0",
+            "port": 8080,
+            "destination": "splunk",
+            "splunk_hec_url": "https://hec.example/event",
+            "splunk_hec_token": "hec-secret",
+            "splunk_index": "fusion",
+            "splunk_sourcetype": "fusion_siem:v1",
+            "qradar_host": "qradar.example",
+            "qradar_port": 514,
+        },
+    )
+    assert put.status_code == 200
+    text = env_file.read_text(encoding="utf-8")
+    assert "FUSION_SIEM_DESTINATION=splunk" in text
+    assert "FUSION_SIEM_SPLUNK_HEC_URL=https://hec.example/event" in text
+    assert "FUSION_SIEM_SPLUNK_HEC_TOKEN=hec-secret" in text
+    assert "FUSION_SIEM_QRADAR_HOST=qradar.example" in text
 
 
 def test_ui_settings_put_writes_env_without_hot_reload(tmp_path):

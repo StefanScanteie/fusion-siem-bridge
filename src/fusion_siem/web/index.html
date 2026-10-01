@@ -58,11 +58,59 @@
           <label for="data-dir">Data directory</label>
           <input id="data-dir" name="data_dir" required>
 
-          <label for="forward-url">Forward URL</label>
-          <input id="forward-url" name="forward_url" placeholder="optional HTTPS collector">
+          <label for="destination">Destination</label>
+          <select id="destination" name="destination">
+            <option value="none">None</option>
+            <option value="splunk">Splunk</option>
+            <option value="qradar">QRadar</option>
+            <option value="rapid7">Rapid7</option>
+            <option value="any">Any</option>
+          </select>
 
-          <label for="forward-token">Forward token</label>
-          <input id="forward-token" name="forward_token" type="password" autocomplete="off" placeholder="leave blank to keep">
+          <div class="dest-fields" data-dest="splunk" hidden>
+            <label for="splunk-hec-url">Splunk HEC URL</label>
+            <input id="splunk-hec-url" name="splunk_hec_url" placeholder="https://splunk:8088/services/collector/event">
+            <label for="splunk-hec-token">Splunk HEC token</label>
+            <input id="splunk-hec-token" name="splunk_hec_token" type="password" autocomplete="off" placeholder="leave blank to keep">
+            <div class="grid two">
+              <div>
+                <label for="splunk-index">Index</label>
+                <input id="splunk-index" name="splunk_index" placeholder="optional">
+              </div>
+              <div>
+                <label for="splunk-sourcetype">Sourcetype</label>
+                <input id="splunk-sourcetype" name="splunk_sourcetype" placeholder="fusion_siem:v1">
+              </div>
+            </div>
+          </div>
+
+          <div class="dest-fields" data-dest="qradar" hidden>
+            <div class="grid">
+              <div>
+                <label for="qradar-host">QRadar host</label>
+                <input id="qradar-host" name="qradar_host" placeholder="syslog collector">
+              </div>
+              <div>
+                <label for="qradar-port">Port</label>
+                <input id="qradar-port" name="qradar_port" type="number" min="1" max="65535" value="514">
+              </div>
+            </div>
+            <p class="note">TCP syslog LEEF. TLS is currently not supported.</p>
+          </div>
+
+          <div class="dest-fields" data-dest="rapid7" hidden>
+            <label for="rapid7-url">Rapid7 custom-log URL</label>
+            <input id="rapid7-url" name="rapid7_url" placeholder="InsightIDR webhook URL">
+            <label for="rapid7-token">Rapid7 API key</label>
+            <input id="rapid7-token" name="rapid7_token" type="password" autocomplete="off" placeholder="leave blank to keep">
+          </div>
+
+          <div class="dest-fields" data-dest="any" hidden>
+            <label for="forward-url">Forward URL</label>
+            <input id="forward-url" name="forward_url" placeholder="optional HTTPS collector">
+            <label for="forward-token">Forward token</label>
+            <input id="forward-token" name="forward_token" type="password" autocomplete="off" placeholder="leave blank to keep">
+          </div>
 
           <div class="grid">
             <div>
