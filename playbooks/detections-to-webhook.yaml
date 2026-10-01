@@ -12,10 +12,10 @@ documentation: |
   2. Set the webhook URL to https://<collector>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
      Taegis.Webhook.post does not send an Authorization header.
   3. Platform trigger: source Alert2, events Create.
-     Filter: `alertSeverity(inputs) >= .6` (Custom Webhook) or
-     `detectionSeverityNice(inputs) in ['High','Critical']` (Send to Webhook).
-  4. Custom Webhook POST body is { "alert": inputs.alert2, "events": loop outputs }.
-     Send to Webhook posts the raw trigger inputs instead and does not resolve events.
+     Filter: `alertSeverity(inputs) >= .6`.
+     send-to-webhook.yaml uses `detectionSeverityNice(inputs) in ['High','Critical']`.
+  4. POST body is { "alert": inputs.alert2, "events": loop outputs }.
+     send-to-webhook.yaml posts the raw trigger inputs instead and does not resolve events.
 
   See playbooks/Custom Webhook Playbook Template_v1.0.1.pdf
 connectorCategories:

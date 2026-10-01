@@ -2,11 +2,11 @@
 
 Middleware plus Fusion Automations playbooks that export **detections**, **related events**, and **cases** from Sophos Fusion (Taegis XDR) to a SIEM.
 
-Fusion playbooks can only POST HTTPS. They cannot talk Splunk HEC, Sentinel, or syslog directly. This collector is the “any SIEM” side: it accepts the official Taegis webhook shapes, normalizes them to a stable `fusion-siem.v1` envelope, writes that envelope locally, and optionally forwards it to another HTTP collector.
+Fusion playbooks can only POST HTTPS. They cannot talk Splunk HEC, Sentinel, or syslog directly. This collector is the “any SIEM” side: it accepts the Fusion webhook JSON those playbooks POST, normalizes it to a stable `fusion-siem.v1` envelope, writes that envelope locally, and optionally forwards it to another HTTP collector.
 
 ```
 Fusion Automations
-  Custom Webhook / Send to Webhook / cases-to-webhook
+  Custom_Webhook / send-to-webhook / cases-to-webhook
         |
         |  HTTPS POST  /v1/ingest?token=...
         v
@@ -20,32 +20,25 @@ SDK backfill (taegis-sdk-python) ---- same /v1/ingest ----^
 
 This is **not** a Data Lake firehose. The slice is detections (Alert2), events linked to those detections or cases, and cases. Downstream SIEM mapping belongs in this collector, not in a one-off Fusion playbook per SIEM.
 
-Playbook YAML follows official Secureworks/Taegis templates. See [playbooks/INSTALL.md](playbooks/INSTALL.md) for the operator walkthrough and [playbooks/CONTRACT.md](playbooks/CONTRACT.md) for the JSON envelope.
+See [playbooks/INSTALL.md](playbooks/INSTALL.md) for the operator walkthrough and [playbooks/CONTRACT.md](playbooks/CONTRACT.md) for the JSON envelope.
 
 ## Which playbook to import
 
 Use one Generic Webhook connection. Pick playbooks by whether you need resolved related events:
 
-| Goal | Import | Official source | POST body |
-| --- | --- | --- | --- |
-| Detections **and** related events | [playbooks/Custom_Webhook_v1.0.1.yaml](playbooks/Custom_Webhook_v1.0.1.yaml) | Catalog **Custom Webhook** v1.0.1 | `{ "alert": <Alert2>, "events": <Event.resolve> }` |
-| Detections **and** cases, no event resolve | [playbooks/send-to-webhook.yaml](playbooks/send-to-webhook.yaml) | Catalog **Send to Webhook** (`Taegis.SendToWebhook` v1.0.2) | Raw trigger `inputs` |
-| Cases **and** related events | [playbooks/cases-to-webhook.yaml](playbooks/cases-to-webhook.yaml) | Case Sync trigger/CEL + Custom Webhook delivery | `{ "alert": { "type": "case", ... }, "events": <Event.resolve> }` |
+| Goal | Import | POST body |
+| --- | --- | --- |
+| Detections **and** related events | [playbooks/Custom_Webhook_v1.0.1.yaml](playbooks/Custom_Webhook_v1.0.1.yaml) | `{ "alert": <Alert2>, "events": <Event.resolve> }` |
+| Detections **and** cases, no event resolve | [playbooks/send-to-webhook.yaml](playbooks/send-to-webhook.yaml) | Raw trigger `inputs` |
+| Cases **and** related events | [playbooks/cases-to-webhook.yaml](playbooks/cases-to-webhook.yaml) | `{ "alert": { "type": "case", ... }, "events": <Event.resolve> }` |
 
-Typical pairing: Custom Webhook for detections, plus `cases-to-webhook.yaml` if the SIEM should see case event evidence. Use Send to Webhook alone if a single catalog playbook is enough and related events can wait for backfill or a later adapter.
+Typical pairing: `Custom_Webhook_v1.0.1.yaml` for detections, plus `cases-to-webhook.yaml` if the SIEM should see case event evidence. Use `send-to-webhook.yaml` alone if one playbook for both sources is enough and related events can wait for backfill or a later adapter.
 
-Do not import the SMAX / Cortex XSOAR / Halo ITSM Case Sync YAMLs here. Those talk to ticketing connectors. They are the source of truth for `source: case` and CEL helpers (`caseId`, `caseTitle`, `caseSeverity`, `casePriority`, `caseTenantId`, `caseKeyFindings`, `caseEventEvidence`, `createShareLink`).
-
-Readable copies without catalog icons:
-
-- [playbooks/detections-to-webhook.yaml](playbooks/detections-to-webhook.yaml) — same workflow as Custom Webhook
-- [playbooks/send-to-webhook.yaml](playbooks/send-to-webhook.yaml) — same workflow as Send to Webhook
-
-Walkthrough PDF: [playbooks/Custom Webhook Playbook Template_v1.0.1.pdf](playbooks/Custom%20Webhook%20Playbook%20Template_v1.0.1.pdf).
+[playbooks/detections-to-webhook.yaml](playbooks/detections-to-webhook.yaml) is the same detections workflow as `Custom_Webhook_v1.0.1.yaml`, without the template icon. Walkthrough: [playbooks/Custom Webhook Playbook Template_v1.0.1.pdf](playbooks/Custom%20Webhook%20Playbook%20Template_v1.0.1.pdf).
 
 ### Recommended platform triggers
 
-**Detections (Custom Webhook)**
+**Detections** (`Custom_Webhook_v1.0.1.yaml` / `detections-to-webhook.yaml`)
 
 | Field | Value |
 | --- | --- |
@@ -54,11 +47,11 @@ Walkthrough PDF: [playbooks/Custom Webhook Playbook Template_v1.0.1.pdf](playboo
 | Events | Create |
 | Filter | `alertSeverity(inputs) >= .6` |
 
-**Detections (Send to Webhook)** — same High/Critical cut, newer CEL names:
+**Detections** (`send-to-webhook.yaml`) — same High/Critical cut, newer CEL names:
 
 `detectionSeverityNice(inputs) in ['High','Critical']`
 
-**Cases**
+**Cases** (`cases-to-webhook.yaml` / `send-to-webhook.yaml`)
 
 | Field | Value |
 | --- | --- |
@@ -67,7 +60,7 @@ Walkthrough PDF: [playbooks/Custom Webhook Playbook Template_v1.0.1.pdf](playboo
 | Events | Create, Update, Delete, Events Added |
 | Filter | `caseSeverity(inputs) in ['High', 'Critical']` |
 
-Send to Webhook and official Case Sync also list detection/asset/comment/file/link mutations. Add those events if the SIEM should see every case change.
+`send-to-webhook.yaml` can also run on detection/asset/comment/file/link case mutations. Add those events if the SIEM should see every case change.
 
 ## Quick start
 
@@ -115,7 +108,7 @@ In Fusion: **Automations → Connections → Generic Webhook**.
 https://<collector-host>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
 ```
 
-`Taegis.Webhook.post` does **not** send an `Authorization` header. The connection Test button is inactive (Secureworks note in the Custom Webhook PDF). Do not create a `FusionSIEM.Webhook` connector.
+`Taegis.Webhook.post` does **not** send an `Authorization` header. The connection Test button is inactive (note in the webhook PDF). Do not create a `FusionSIEM.Webhook` connector.
 
 The collector host must be reachable from Fusion (public HTTPS or a reverse proxy Fusion can call).
 
@@ -125,10 +118,10 @@ The collector host must be reachable from Fusion (public HTTPS or a reverse prox
 
 | Inbound | How it arrives | How it is recognized |
 | --- | --- | --- |
-| Custom Webhook detection | `{ "alert": <Alert2>, "events": ... }` | `alert` / `alert2` present, `type` is `alert2` or absent |
+| `Custom_Webhook_v1.0.1.yaml` | `{ "alert": <Alert2>, "events": ... }` | `alert` / `alert2` present, `type` is `alert2` or absent |
 | `cases-to-webhook.yaml` | `{ "alert": { "type": "case", ... }, "events": ... }` | `alert.type == "case"` |
-| Send to Webhook detection | Raw Alert2 trigger `inputs` | nested `alert2`, or top-level `type: alert2` |
-| Send to Webhook case | Raw case trigger `inputs` | `type: SECURITY_CASE`, `keyFindings` / `primaryStatus`, nested `case`, or PascalCase case `event` |
+| `send-to-webhook.yaml` detection | Raw Alert2 trigger `inputs` | nested `alert2`, or top-level `type: alert2` |
+| `send-to-webhook.yaml` case | Raw case trigger `inputs` | `type: SECURITY_CASE`, `keyFindings` / `primaryStatus`, nested `case`, or PascalCase case `event` |
 | Backfill / `post-file` | Canonical `fusion-siem.v1` | `datastream` is `detection` or `case` |
 
 Auth:
@@ -150,7 +143,7 @@ Idempotency key is `{tenant_id}:{datastream}:{id}`. Case updates from Fusion reu
 
 Written to `data/outbox.jsonl` and, if configured, POSTed to `FUSION_SIEM_FORWARD_URL`.
 
-Detection severity stays on the Fusion GraphQL `0.0`–`1.0` scale. Case severity and priority stay Case Sync strings (`High`, `Critical`). Do not convert either to a SIEM integer in this collector until a named adapter does it.
+Detection severity stays on the Fusion GraphQL `0.0`–`1.0` scale. Case severity and priority stay Fusion case strings (`High`, `Critical`). Do not convert either to a SIEM integer in this collector until a named adapter does it.
 
 **Detection**
 
@@ -205,9 +198,9 @@ Full field notes: [playbooks/CONTRACT.md](playbooks/CONTRACT.md).
 | --- | --- |
 | [examples/detection.json](examples/detection.json) | Canonical detection |
 | [examples/case.json](examples/case.json) | Canonical case |
-| [examples/taegis-webhook-alert.json](examples/taegis-webhook-alert.json) | Custom Webhook `{alert, events}` |
-| [examples/taegis-webhook-case.json](examples/taegis-webhook-case.json) | Synthetic `{alert: {type: case}, events}` |
-| [examples/taegis-send-to-webhook-case.json](examples/taegis-send-to-webhook-case.json) | Raw Send to Webhook case `inputs` |
+| [examples/taegis-webhook-alert.json](examples/taegis-webhook-alert.json) | `Custom_Webhook_v1.0.1.yaml` `{alert, events}` |
+| [examples/taegis-webhook-case.json](examples/taegis-webhook-case.json) | `cases-to-webhook.yaml` `{alert: {type: case}, events}` |
+| [examples/taegis-send-to-webhook-case.json](examples/taegis-send-to-webhook-case.json) | `send-to-webhook.yaml` raw case `inputs` |
 
 ## CLI
 

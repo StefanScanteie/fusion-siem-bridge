@@ -6,13 +6,13 @@ Generic Webhook URL (`?token=`). Bearer still works for backfill and
 
 `Taegis.Webhook.post` is used two ways:
 
-- **Custom Webhook** maps `{ "alert": <Alert2>, "events": <resolved events> }`.
-  Detections put Alert2 in `alert`. `cases-to-webhook.yaml` puts a synthetic
-  object with `"type": "case"` in that same slot.
-- **Send to Webhook** (`Taegis.SendToWebhook`) posts the raw trigger `inputs`
-  (`inputs: inputs`). Alert2 triggers arrive as `alert2` or a top-level Alert2
-  object. Case triggers arrive as the case record (`type: SECURITY_CASE`,
-  `keyFindings`, `primaryStatus`, `tenantId`, `event: Create`, …).
+- `Custom_Webhook_v1.0.1.yaml` and `cases-to-webhook.yaml` map
+  `{ "alert": <object>, "events": <resolved events> }`. Detections put Alert2
+  in `alert`. Cases put a synthetic object with `"type": "case"` in that slot.
+- `send-to-webhook.yaml` posts the raw trigger `inputs` (`inputs: inputs`).
+  Alert2 triggers arrive as `alert2` or a top-level Alert2 object. Case
+  triggers arrive as the case record (`type: SECURITY_CASE`, `keyFindings`,
+  `primaryStatus`, `tenantId`, `event: Create`, …).
 
 Backfill posts the canonical `fusion-siem.v1` document. All of these become
 the same envelope.
@@ -51,7 +51,7 @@ the same envelope.
 ```
 
 For cases, set `datastream` to `"case"`, omit or null `detection`, and fill `case`.
-Severity and priority are Case Sync strings (`High`, `Critical`), not the
+Severity and priority are Fusion case strings (`High`, `Critical`), not the
 Alert2 0.0–1.0 scale.
 
 ```json

@@ -5,9 +5,8 @@ version: 1.0.2
 title: Fusion SIEM — Send to Webhook
 description: Post Detection or Case trigger inputs to the fusion-siem-bridge webhook URL
 documentation: |
-  This is the catalog Taegis.SendToWebhook v1.0.2 workflow: one playbook, two
-  platform sources (alert2 and case), and a single task that posts the raw
-  trigger inputs via Taegis.Webhook.post.
+  One playbook, two platform sources (alert2 and case), and a single task that
+  posts the raw trigger inputs via Taegis.Webhook.post.
 
   It does not resolve related events. Prefer Custom_Webhook_v1.0.1.yaml when
   detections need Event.resolve, and cases-to-webhook.yaml when cases need

@@ -5,25 +5,24 @@ version: 1.0.1
 title: Fusion SIEM — cases and related events to webhook
 description: Post Case inputs to the fusion-siem-bridge webhook URL
 documentation: |
-  Cases are not in Custom Webhook v1.0.1 (Alert2 only). Catalog Send to Webhook
-  posts raw case trigger inputs with no Event.resolve. This playbook keeps the
-  Case Sync trigger/CEL helpers and attaches resolved events, mapping into
-  Taegis.Webhook.post's {alert, events} slots.
+  Custom_Webhook_v1.0.1.yaml is Alert2 only. send-to-webhook.yaml posts raw
+  case trigger inputs with no Event.resolve. This playbook attaches resolved
+  events and maps them into Taegis.Webhook.post's {alert, events} slots.
 
   1. Reuse the Generic Webhook connection from detections.
      URL: https://<collector>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
      Taegis.Webhook.post does not send an Authorization header.
   2. Platform trigger: source case. Recommended events: Create, Update, Delete,
-     Events Added. Official Case Sync also lists detection/asset/comment/file
-     events — add those if the SIEM should see every case mutation.
+     Events Added. Add detection/asset/comment/file events if the SIEM should
+     see every case mutation.
   3. Recommended filter: caseSeverity(inputs) in ['High', 'Critical']
   4. Taegis.Webhook.post only accepts {alert, events}. This playbook puts a
      synthetic alert with type: case in the alert slot so the collector can
      distinguish cases from Alert2 detections.
 
-  CEL helpers (from official Case Sync triggerHints): caseId, caseTitle,
-  caseSeverity, casePriority, caseTenantId, caseKeyFindings, caseType,
-  caseStatus, caseEventEvidence, createShareLink, inputs.event.
+  CEL helpers: caseId, caseTitle, caseSeverity, casePriority, caseTenantId,
+  caseKeyFindings, caseType, caseStatus, caseEventEvidence, createShareLink,
+  inputs.event.
 connectorCategories:
   - Generic
 connectors:
