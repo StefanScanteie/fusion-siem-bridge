@@ -1,0 +1,24 @@
+{
+  "alert": {
+    "type": "case",
+    "resource_id": "case://48454/abc-123",
+    "tenant_id": "48454",
+    "status": "OPEN",
+    "metadata": {
+      "title": "Suspected intrusion",
+      "description": "Key findings from the case"
+    },
+    "case_severity": "High",
+    "case_priority": "Critical",
+    "case_type": "SECURITY_CASE",
+    "url": "https://ctpx.secureworks.com/cases/abc-123",
+    "playbook_event": "Create"
+  },
+  "events": [
+    {
+      "id": "event://priv:scwx.process:48454:1675951030000:2c0735a1",
+      "commandline": "powershell.exe get-httpstatus",
+      "hostname": "WSAMZN-VU5R5RS6"
+    }
+  ]
+}

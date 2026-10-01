@@ -59,7 +59,7 @@ def case_to_payload(
     case_id = str(case["id"])
     url = None
     if console_url:
-        url = f"{console_url.rstrip('/')}/investigations/{case_id}"
+        url = f"{console_url.rstrip('/')}/cases/{case_id}"
     payload = {
         "schema": "fusion-siem.v1",
         "datastream": "case",
@@ -68,9 +68,12 @@ def case_to_payload(
         "case": {
             "id": case_id,
             "title": case.get("title"),
-            "severity": case.get("severity") or case.get("primaryStatus"),
+            "severity": case.get("severity") or case.get("case_severity"),
+            "priority": case.get("priority") or case.get("case_priority"),
             "status": case.get("status") or case.get("primaryStatus"),
+            "case_type": case.get("case_type") or case.get("type"),
             "url": url,
+            "key_findings": case.get("key_findings") or case.get("keyFindings"),
         },
         "events": events or [],
     }

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from fusion_siem.auth import verify_bearer_token
+from fusion_siem.auth import verify_ingest_token
 from fusion_siem.config import Settings
 from fusion_siem.pipeline import IngestPipeline
 
@@ -23,9 +23,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def ingest(
         request: Request,
         authorization: str | None = Header(default=None),
+        token: str | None = Query(default=None),
     ) -> JSONResponse:
         try:
-            verify_bearer_token(authorization, settings.ingest_token)
+            verify_ingest_token(
+                authorization,
+                settings.ingest_token,
+                query_token=token,
+            )
         except PermissionError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 

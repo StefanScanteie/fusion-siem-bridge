@@ -1,0 +1,18 @@
+{
+  "event": "Create",
+  "id": "send-to-webhook-case-1",
+  "tenantId": "48454",
+  "title": "Suspected intrusion",
+  "severity": "High",
+  "priority": "Critical",
+  "type": "SECURITY_CASE",
+  "primaryStatus": {"id": "OPEN"},
+  "keyFindings": "Key findings from the case",
+  "url": "https://ctpx.secureworks.com/cases/send-to-webhook-case-1",
+  "eventEvidence": [
+    {
+      "id": "event://priv:scwx.process:48454:1675951030000:2c0735a1",
+      "commandline": "powershell.exe get-httpstatus"
+    }
+  ]
+}

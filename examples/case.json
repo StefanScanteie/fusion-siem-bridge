@@ -4,11 +4,15 @@
   "tenant_id": "48454",
   "source": "playbook",
   "case": {
-    "id": "investigation://example-tenant/cases/99",
+    "id": "case://48454/canonical-99",
     "title": "Suspected intrusion",
-    "severity": "HIGH",
+    "severity": "High",
+    "priority": "Critical",
     "status": "OPEN",
-    "url": "https://ctpx.secureworks.com/investigations/99"
+    "case_type": "SECURITY_CASE",
+    "url": "https://ctpx.secureworks.com/cases/canonical-99",
+    "key_findings": "Key findings from the case",
+    "event": "Create"
   },
   "events": []
 }

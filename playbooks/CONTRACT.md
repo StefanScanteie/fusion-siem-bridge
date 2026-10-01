@@ -1,9 +1,21 @@
 # Playbook payload contract (`fusion-siem.v1`)
 
-Fusion playbooks POST this JSON to `POST /v1/ingest` with
-`Authorization: Bearer <FUSION_SIEM_INGEST_TOKEN>`.
+Fusion playbooks POST JSON to `POST /v1/ingest`. Put the ingest token in the
+Generic Webhook URL (`?token=`). Bearer still works for backfill and
+`fusion-siem post-file`.
 
-The SDK backfill CLI emits the same document (`source: "backfill"`).
+`Taegis.Webhook.post` is used two ways:
+
+- **Custom Webhook** maps `{ "alert": <Alert2>, "events": <resolved events> }`.
+  Detections put Alert2 in `alert`. `cases-to-webhook.yaml` puts a synthetic
+  object with `"type": "case"` in that same slot.
+- **Send to Webhook** (`Taegis.SendToWebhook`) posts the raw trigger `inputs`
+  (`inputs: inputs`). Alert2 triggers arrive as `alert2` or a top-level Alert2
+  object. Case triggers arrive as the case record (`type: SECURITY_CASE`,
+  `keyFindings`, `primaryStatus`, `tenantId`, `event: Create`, …).
+
+Backfill posts the canonical `fusion-siem.v1` document. All of these become
+the same envelope.
 
 ```json
 {
@@ -38,15 +50,21 @@ The SDK backfill CLI emits the same document (`source: "backfill"`).
 }
 ```
 
-For cases, set `datastream` to `"case"`, omit or null `detection`, and fill `case`:
+For cases, set `datastream` to `"case"`, omit or null `detection`, and fill `case`.
+Severity and priority are Case Sync strings (`High`, `Critical`), not the
+Alert2 0.0–1.0 scale.
 
 ```json
 {
-  "id": "investigation://...",
+  "id": "case://48454/abc-123",
   "title": "Suspected intrusion",
-  "severity": "HIGH",
+  "severity": "High",
+  "priority": "Critical",
   "status": "OPEN",
-  "url": "https://console.example/investigations/..."
+  "case_type": "SECURITY_CASE",
+  "url": "https://console.example/cases/abc-123",
+  "key_findings": "Key findings from the case",
+  "event": "Create"
 }
 ```
 

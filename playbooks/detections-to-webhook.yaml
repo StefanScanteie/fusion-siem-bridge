@@ -1,89 +1,43 @@
 apiVersion: v0.0.1
 kind: Playbook
 name: FusionSIEMDetectionsToWebhook
-version: 1.0.0
+version: 1.0.1
 title: Fusion SIEM — detections and related events to webhook
-description: >
-  On detection create, resolve related events and POST a fusion-siem.v1 JSON
-  document to the fusion-siem-bridge collector. The collector fans out to the
-  customer SIEM.
+description: Post Alert2/Event inputs to the fusion-siem-bridge webhook URL
 documentation: |
-  ## WARNING
-  Data sent via this playbook leaves the Fusion/Taegis environment and is
-  delivered to the HTTPS URL you configure. Review that destination against
-  your data-handling policy.
+  Import playbooks/Custom_Webhook_v1.0.1.yaml for the supported template.
+  This file is the same workflow with Fusion SIEM install notes.
 
-  ## Overview
-  Platform trigger on `alert2` create. Related event IDs are resolved with
-  `Taegis.Event.resolve`, then the payload in playbooks/CONTRACT.md is posted
-  to your middleware `/v1/ingest` endpoint.
+  1. Create a Generic Webhook connection.
+  2. Set the webhook URL to https://<collector>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
+     Taegis.Webhook.post does not send an Authorization header.
+  3. Platform trigger: source Alert2, events Create.
+     Filter: `alertSeverity(inputs) >= .6` (Custom Webhook) or
+     `detectionSeverityNice(inputs) in ['High','Critical']` (Send to Webhook).
+  4. Custom Webhook POST body is { "alert": inputs.alert2, "events": loop outputs }.
+     Send to Webhook posts the raw trigger inputs instead and does not resolve events.
 
-  Minimum severity uses the Fusion GraphQL scale (0.0–1.0). Default 0.6 is
-  High and above.
-
-  ## Inputs
-  | Input | Required | Description |
-  | --- | --- | --- |
-  | Webhook URL | Yes | Collector URL, including `/v1/ingest` |
-  | Webhook token | Yes | Bearer token, same as `FUSION_SIEM_INGEST_TOKEN` |
-  | Minimum severity | No | Default `0.6` |
-tags:
-  - Category:SIEM
-  - Type:Notification
+  See playbooks/Custom Webhook Playbook Template_v1.0.1.pdf
 connectorCategories:
   - Generic
 connectors:
-  - Taegis.Event:1.2.0
-  - FusionSIEM.Webhook:1.0.0
+  - Taegis.Alert:1.2.0
+  - Taegis.Event:1.0.10
+  - Taegis.Webhook:1.0.0
 triggerHints:
   - isProactiveResponse: false
     type: platform
     config:
       events:
         - create
-      filter: alertSeverity(inputs) >= inputs.configuration.min_severity
+      filter: alertSeverity(inputs) >= 0.6
       source: alert2
-    celHints:
-      - name: Alert with High and above severity
-        expr: alertSeverity(inputs) >= 0.6
-      - name: Alert with High and Critical severity
-        expr: alertSeverityNice(inputs) in ['High','Critical']
-      - name: Alert with Attack Technique Ids
-        expr: alertAttackTechniqueIds(inputs).exists(x,x.contains(['T1086','T1219']))
-      - name: Alert with sensor types
-        expr: alertSensorTypes(inputs).exists(s, s.contains(['ENDPOINT_TAEGIS']))
 inputs:
-  properties:
-    configuration:
-      properties:
-        webhook_url:
-          title: Webhook URL
-          type: string
-          description: fusion-siem-bridge ingest URL, for example https://collector.example/v1/ingest
-        webhook_token:
-          title: Webhook token
-          type: string
-          description: Shared secret sent as Authorization Bearer
-        min_severity:
-          title: Minimum severity
-          type: number
-          default: 0.6
-          description: Fusion detection severity 0.0–1.0
-      required:
-        - webhook_url
-        - webhook_token
-      type: object
   type: object
 outputs:
-  properties:
-    outcome:
-      type: string
-    status_code:
-      type: integer
   type: object
 dsl:
-  name: Detections to SIEM webhook
-  description: Resolve related events and POST fusion-siem.v1 JSON
+  name: webhook
   tasks:
     - name: loop_over_alert_events
       variables:
@@ -92,44 +46,11 @@ dsl:
       for:
         - name: fetch_event_details
           action: Taegis.Event.resolve
-          retry: 3
           inputs:
             id: loop_over_alert_events.value
-          let:
-            results: >-
-              loop_over_alert_events.variables.results + [{
-                "id": loop_over_alert_events.value,
-                "event_type": has(fetch_event_details.outputs, 'eventType') ? fetch_event_details.outputs.eventType : (has(fetch_event_details.outputs, 'event_type') ? fetch_event_details.outputs.event_type : null),
-                "summary": has(fetch_event_details.outputs, 'message') ? fetch_event_details.outputs.message : (has(fetch_event_details.outputs, 'summary') ? fetch_event_details.outputs.summary : ''),
-                "event_time": has(fetch_event_details.outputs, 'eventTime') ? fetch_event_details.outputs.eventTime : (has(fetch_event_details.outputs, 'event_time') ? fetch_event_details.outputs.event_time : null),
-                "values": has(fetch_event_details.outputs, 'values') ? fetch_event_details.outputs.values : {}
-              }]
-    - name: post_webhook
-      action: FusionSIEM.Webhook.post
-      retry: 5
+    - name: webhook_post
+      action: Taegis.Webhook.post
       inputs:
-        webhook_url: inputs.configuration.webhook_url
-        webhook_token: inputs.configuration.webhook_token
-        body:
-          schema: fusion-siem.v1
-          datastream: detection
-          tenant_id: TDR.tenant
-          source: playbook
-          detection:
-            id: alertId(inputs)
-            title: alertTitle(inputs)
-            description: alertDescription(inputs)
-            severity: alertSeverity(inputs)
-            status: alertStatus(inputs)
-            sensor_types: alertSensorTypes(inputs)
-            attack_technique_ids: alertAttackTechniqueIds(inputs)
-            url: '${TDR.URL}/alerts/${alertId(inputs).toURLQuery()}'
-          events: >-
-            has(loop_over_alert_events, 'variables.results')
-              ? loop_over_alert_events.variables.results
-              : []
-      let:
-        outcome: posted
-        status_code: >-
-          has(post_webhook.outputs, 'status_code') ? post_webhook.outputs.status_code : 0
+        alert: inputs.alert2
+        events: loop_over_alert_events.outputs
 type: None

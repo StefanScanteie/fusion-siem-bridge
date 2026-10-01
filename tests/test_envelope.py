@@ -53,11 +53,12 @@ def test_case_playbook_payload_becomes_envelope():
         "tenant_id": "48454",
         "source": "playbook",
         "case": {
-            "id": "investigation://tenant/cases/99",
+            "id": "case://48454/abc-123",
             "title": "Suspected intrusion",
-            "severity": "HIGH",
+            "severity": "High",
+            "priority": "Critical",
             "status": "OPEN",
-            "url": "https://ctpx.secureworks.com/investigations/99",
+            "url": "https://ctpx.secureworks.com/cases/abc-123",
         },
         "events": [],
     }
@@ -65,6 +66,7 @@ def test_case_playbook_payload_becomes_envelope():
     envelope = envelope_from_playbook(payload)
 
     assert envelope.datastream == "case"
-    assert envelope.case.id == "investigation://tenant/cases/99"
+    assert envelope.case.id == "case://48454/abc-123"
+    assert envelope.case.priority == "Critical"
     assert envelope.detection is None
-    assert envelope.idempotency_key == "48454:case:investigation://tenant/cases/99"
+    assert envelope.idempotency_key == "48454:case:case://48454/abc-123"

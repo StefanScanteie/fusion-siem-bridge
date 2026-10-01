@@ -1,84 +1,108 @@
 # Install the Fusion playbooks
 
-These templates export detections (with related events) and cases to the
-fusion-siem-bridge middleware. Fusion Automations only speaks HTTPS; the
-middleware is what fans out to Splunk, Sentinel, syslog, or another SIEM.
+The detections path is the Secureworks **Custom Webhook** template, not a
+home-grown connector. Fusion Automations only POSTs HTTPS; this collector
+accepts that POST and fans out to a SIEM.
 
 ## 1. Run the middleware
 
-The playbook URL must be reachable from Fusion (public HTTPS or an allow-listed
-collector). Set a long random ingest token.
+The webhook URL must be reachable from Fusion.
 
 ```bash
 export FUSION_SIEM_INGEST_TOKEN='replace-me'
 fusion-siem serve
 ```
 
-Optional: forward the canonical envelope to another HTTP collector (your SIEM
-webhook, Cribl, a function app, Splunk HEC proxy):
+`Taegis.Webhook.post` does **not** send `Authorization`. Put the token in the
+connection URL:
 
-```bash
-export FUSION_SIEM_FORWARD_URL='https://siem.example/collector'
-export FUSION_SIEM_FORWARD_TOKEN='siem-token'
+```
+https://<collector-host>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
 ```
 
-Until `FORWARD_URL` is set, events are appended to `data/outbox.jsonl` only
-(dry-run).
+Bearer tokens still work for `fusion-siem post-file` and SDK backfill.
 
-## 2. Create a Custom Connector
+Until `FUSION_SIEM_FORWARD_URL` is set, events are appended to
+`data/outbox.jsonl` only.
 
-In Fusion: **Automations → Connections → Connector Library → Create**.
+## 2. Generic Webhook connection
+
+In Fusion: **Automations → Connections**. Create **Generic Webhook** and set
+the URL above. The connection Test button is inactive (Secureworks note in
+the PDF).
+
+Do not create `FusionSIEM.Webhook`. The template calls `Taegis.Webhook.post`.
+
+## 3. Import detections (official Custom Webhook)
+
+Import [`Custom_Webhook_v1.0.1.yaml`](Custom_Webhook_v1.0.1.yaml) when you need
+Alert2 **plus related events**. Walkthrough:
+[`Custom Webhook Playbook Template_v1.0.1.pdf`](Custom%20Webhook%20Playbook%20Template_v1.0.1.pdf).
+
+Platform trigger:
 
 | Field | Value |
 | --- | --- |
-| Connector name | `FusionSIEM.Webhook` |
-| Function name | `post` |
-| Method | `POST` |
-| URL | playbook input `webhook_url` |
-| Header `Content-Type` | `application/json` |
-| Header `Authorization` | `Bearer ${webhook_token}` |
-| Body | raw JSON from playbook input `body` |
+| Trigger type | Platform |
+| Source | Alert2 |
+| Events | Create |
+| Filter | `alertSeverity(inputs) >= .6` |
 
-Publish the connector so playbook templates can call `FusionSIEM.Webhook.post`.
+That POSTs `{ "alert": <Alert2>, "events": <Event.resolve outputs> }`. The
+collector maps it to the canonical envelope.
 
-If your tenant already has **Generic Webhook**, you can point that at
-`https://<collector>/v1/ingest` and put the token in a header, but you still
-need the playbook to send the `fusion-siem.v1` body from CONTRACT.md — not
-the raw `alert2` trigger blob.
+[`detections-to-webhook.yaml`](detections-to-webhook.yaml) is the same workflow
+without the template icon, kept as a readable copy.
 
-## 3. Import the playbook templates
+The catalog **Send to Webhook** playbook (`Taegis.SendToWebhook` v1.0.2) is the
+newer dual-source template. Its default Alert2 filter is
+`detectionSeverityNice(inputs) in ['High','Critical']` (same High/Critical
+cut, newer CEL names). It does **not** call `Taegis.Event.resolve`.
 
-Import:
+## 4. Cases
 
-- [`detections-to-webhook.yaml`](detections-to-webhook.yaml)
-- [`cases-to-webhook.yaml`](cases-to-webhook.yaml)
+Two official templates cover cases:
 
-Create a playbook instance per tenant. Inputs:
+| Template | Delivery | Related events |
+| --- | --- | --- |
+| Catalog **Send to Webhook** | `Taegis.Webhook.post` with `inputs: inputs` (raw case trigger) | No |
+| Case Sync (SMAX / Cortex / Halo) | ITSM connectors | No |
 
-| Input | Example |
+Import [`send-to-webhook.yaml`](send-to-webhook.yaml) to use the catalog
+workflow against this collector (detections and cases, no event resolve).
+
+Import [`cases-to-webhook.yaml`](cases-to-webhook.yaml) when the SIEM should
+receive resolved event evidence. That playbook uses the same `source: case`
+trigger and CEL helpers as Case Sync (`caseId`, `caseTitle`, `caseSeverity`,
+`casePriority`, `caseTenantId`, `caseKeyFindings`, `caseEventEvidence`,
+`createShareLink`), then POSTs a synthetic `{ "alert": { "type": "case", ... }, "events": ... }`
+because mapping into Custom Webhook's `{alert, events}` slots is how Event.resolve
+output is attached.
+
+Reuse the detections Generic Webhook connection. Case trigger:
+
+| Field | Value |
 | --- | --- |
-| Webhook URL | `https://collector.example/v1/ingest` |
-| Webhook token | same value as `FUSION_SIEM_INGEST_TOKEN` |
-| Minimum severity | `0.6` (detections only; Fusion scale 0–1) |
+| Trigger type | Platform |
+| Source | case |
+| Events | Create, Update, Delete, Events Added |
+| Filter | `caseSeverity(inputs) in ['High', 'Critical']` |
 
-Enable the **platform** trigger (`alert2` create, or investigation/case create).
+## 5. Verify
 
-## 4. Verify
-
-Trigger a test detection or POST [`examples/detection.json`](../examples/detection.json):
+Generate a High/Critical detection or case, or POST the native shapes:
 
 ```bash
-fusion-siem post-file examples/detection.json
+fusion-siem post-file examples/taegis-webhook-alert.json --url 'http://127.0.0.1:8080/v1/ingest?token=replace-me'
+fusion-siem post-file examples/taegis-webhook-case.json --url 'http://127.0.0.1:8080/v1/ingest?token=replace-me'
+fusion-siem post-file examples/taegis-send-to-webhook-case.json --url 'http://127.0.0.1:8080/v1/ingest?token=replace-me'
 ```
 
-Confirm a 202 and a new line in `data/outbox.jsonl`.
+Expect HTTP 202 and a new line in `data/outbox.jsonl`.
 
-## 5. Backfill
+## 6. Backfill
 
 ```bash
 pip install -e '.[backfill]'
 fusion-siem backfill --tenant-id <tenant-uuid>
 ```
-
-Uses `taegis-sdk-python` (`CLIENT_ID` / `CLIENT_SECRET`) and posts the same
-contract the playbooks use.

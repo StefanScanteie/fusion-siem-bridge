@@ -1,121 +1,89 @@
 apiVersion: v0.0.1
 kind: Playbook
 name: FusionSIEMCasesToWebhook
-version: 1.0.0
-title: Fusion SIEM — cases to webhook
-description: >
-  On case/investigation create, POST a fusion-siem.v1 JSON document to the
-  fusion-siem-bridge collector. Related event IDs are resolved when present.
+version: 1.0.1
+title: Fusion SIEM — cases and related events to webhook
+description: Post Case inputs to the fusion-siem-bridge webhook URL
 documentation: |
-  ## WARNING
-  Data sent via this playbook leaves the Fusion/Taegis environment and is
-  delivered to the HTTPS URL you configure.
+  Cases are not in Custom Webhook v1.0.1 (Alert2 only). Catalog Send to Webhook
+  posts raw case trigger inputs with no Event.resolve. This playbook keeps the
+  Case Sync trigger/CEL helpers and attaches resolved events, mapping into
+  Taegis.Webhook.post's {alert, events} slots.
 
-  ## Overview
-  Platform trigger on investigation/case create. Posts the case contract in
-  playbooks/CONTRACT.md to `/v1/ingest`.
+  1. Reuse the Generic Webhook connection from detections.
+     URL: https://<collector>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
+     Taegis.Webhook.post does not send an Authorization header.
+  2. Platform trigger: source case. Recommended events: Create, Update, Delete,
+     Events Added. Official Case Sync also lists detection/asset/comment/file
+     events — add those if the SIEM should see every case mutation.
+  3. Recommended filter: caseSeverity(inputs) in ['High', 'Critical']
+  4. Taegis.Webhook.post only accepts {alert, events}. This playbook puts a
+     synthetic alert with type: case in the alert slot so the collector can
+     distinguish cases from Alert2 detections.
 
-  CEL helper names for cases vary by tenant schema (`investigationId`,
-  `caseId`, title, status). Confirm helper names in your Automations editor
-  if import reports unknown functions, then adjust the `detection`-style
-  mappings in `post_webhook`.
-
-  ## Inputs
-  | Input | Required | Description |
-  | --- | --- | --- |
-  | Webhook URL | Yes | Collector URL, including `/v1/ingest` |
-  | Webhook token | Yes | Bearer token, same as `FUSION_SIEM_INGEST_TOKEN` |
-tags:
-  - Category:SIEM
-  - Type:Notification
+  CEL helpers (from official Case Sync triggerHints): caseId, caseTitle,
+  caseSeverity, casePriority, caseTenantId, caseKeyFindings, caseType,
+  caseStatus, caseEventEvidence, createShareLink, inputs.event.
 connectorCategories:
   - Generic
 connectors:
-  - Taegis.Event:1.2.0
-  - FusionSIEM.Webhook:1.0.0
+  - Taegis.Case:1.0.2
+  - Taegis.Event:1.0.10
+  - Taegis.Webhook:1.0.0
 triggerHints:
   - isProactiveResponse: false
     type: platform
     config:
       events:
-        - create
-      source: investigation
+        - Create
+        - Update
+        - Delete
+        - Events Added
+        - Events Removed
+      filter: caseSeverity(inputs) in ['High', 'Critical']
+      source: case
+    celHints:
+      - name: High or Critical Cases
+        expr: caseSeverity(inputs) in ['High', 'Critical']
+      - name: Security Cases
+        expr: caseType(inputs) == 'SECURITY_CASE'
+      - name: Closed Cases
+        expr: isCaseClosed(inputs)
+      - name: Has Event Evidence
+        expr: size(caseEventEvidence(inputs)) > 0
+      - name: Tenant Is One Of
+        expr: caseTenantId(inputs) in ['12345']
 inputs:
-  properties:
-    configuration:
-      properties:
-        webhook_url:
-          title: Webhook URL
-          type: string
-        webhook_token:
-          title: Webhook token
-          type: string
-      required:
-        - webhook_url
-        - webhook_token
-      type: object
   type: object
 outputs:
-  properties:
-    outcome:
-      type: string
   type: object
 dsl:
-  name: Cases to SIEM webhook
-  description: POST fusion-siem.v1 case JSON
+  name: webhook
   tasks:
-    - name: collect_event_ids
-      let:
-        ids: >-
-          has(inputs, 'eventIds') ? inputs.eventIds :
-          (has(inputs, 'eventsEvidence') ? inputs.eventsEvidence : [])
     - name: loop_over_case_events
-      condition: size(collect_event_ids.variables.ids) > 0
       variables:
         results: []
-      range: collect_event_ids.variables.ids
+      range: caseEventEvidence(inputs)
       for:
         - name: fetch_event_details
           action: Taegis.Event.resolve
-          retry: 3
           inputs:
             id: loop_over_case_events.value
-          let:
-            results: >-
-              loop_over_case_events.variables.results + [{
-                "id": loop_over_case_events.value,
-                "summary": has(fetch_event_details.outputs, 'message') ? fetch_event_details.outputs.message : '',
-                "values": has(fetch_event_details.outputs, 'values') ? fetch_event_details.outputs.values : {}
-              }]
-    - name: post_webhook
-      action: FusionSIEM.Webhook.post
-      retry: 5
+    - name: webhook_post
+      action: Taegis.Webhook.post
       inputs:
-        webhook_url: inputs.configuration.webhook_url
-        webhook_token: inputs.configuration.webhook_token
-        body:
-          schema: fusion-siem.v1
-          datastream: case
-          tenant_id: TDR.tenant
-          source: playbook
-          case:
-            id: >-
-              has(inputs, 'id') ? inputs.id :
-              (has(inputs, 'investigationId') ? inputs.investigationId : string(inputs))
-            title: >-
-              has(inputs, 'title') ? inputs.title : 'Fusion case'
-            severity: >-
-              has(inputs, 'severity') ? inputs.severity :
-              (has(inputs, 'priority') ? inputs.priority : null)
-            status: >-
-              has(inputs, 'status') ? inputs.status :
-              (has(inputs, 'primaryStatus') ? inputs.primaryStatus : null)
-            url: >-
-              TDR.URL + '/investigations/' + (has(inputs, 'id') ? inputs.id : '')
-          events: >-
-            has(loop_over_case_events, 'variables.results')
-              ? loop_over_case_events.variables.results
-              : []
-      let:
-        outcome: posted
+        alert:
+          type: case
+          resource_id: caseId(inputs)
+          tenant_id: caseTenantId(inputs)
+          status: caseStatus(inputs)
+          metadata:
+            title: caseTitle(inputs)
+            description: caseKeyFindings(inputs)
+          case_severity: caseSeverity(inputs)
+          case_priority: casePriority(inputs)
+          case_type: caseType(inputs)
+          url: createShareLink(inputs)
+          playbook_event: inputs.?event.orValue('')
+        events: loop_over_case_events.outputs
 type: None

@@ -1,0 +1,88 @@
+apiVersion: v0.0.1
+kind: Playbook
+name: FusionSIEMSendToWebhook
+version: 1.0.2
+title: Fusion SIEM — Send to Webhook
+description: Post Detection or Case trigger inputs to the fusion-siem-bridge webhook URL
+documentation: |
+  This is the catalog Taegis.SendToWebhook v1.0.2 workflow: one playbook, two
+  platform sources (alert2 and case), and a single task that posts the raw
+  trigger inputs via Taegis.Webhook.post.
+
+  It does not resolve related events. Prefer Custom_Webhook_v1.0.1.yaml when
+  detections need Event.resolve, and cases-to-webhook.yaml when cases need
+  resolved event evidence plus a structured type: case body.
+
+  1. Create a Generic Webhook connection.
+  2. URL: https://<collector>/v1/ingest?token=<FUSION_SIEM_INGEST_TOKEN>
+     Taegis.Webhook.post does not send an Authorization header.
+  3. Attach two platform triggers, or import this file and configure them:
+       - source alert2, event create, filter
+         detectionSeverityNice(inputs) in ['High','Critical']
+       - source case, events Create/Update/Delete plus evidence mutations
+  4. The POST body is the trigger inputs object, not {alert, events}.
+connectorCategories:
+  - Generic
+connectors:
+  - Taegis.Webhook:1.0.0
+triggerHints:
+  - isProactiveResponse: false
+    type: platform
+    config:
+      events:
+        - create
+      filter: detectionSeverityNice(inputs) in ['High','Critical']
+      source: alert2
+    celHints:
+      - name: Detection with High and above severity
+        expr: detectionSeverity(inputs) >= 0.6
+      - name: Detection with High and Critical severity
+        expr: detectionSeverityNice(inputs) in ['High','Critical']
+  - isProactiveResponse: false
+    type: platform
+    config:
+      events:
+        - Create
+        - Update
+        - Delete
+        - Detections Added
+        - Detections Removed
+        - Events Added
+        - Events Removed
+        - Assets Added
+        - Assets Removed
+        - Comment Added
+        - Comment Updated
+        - Comment Deleted
+        - File Added
+        - File Deleted
+        - Searches Added
+        - Searches Removed
+        - Link Added
+        - Link Updated
+        - Link Deleted
+      source: case
+    celHints:
+      - name: High or Critical Cases
+        expr: caseSeverity(inputs) in ['High', 'Critical']
+      - name: Security Cases
+        expr: caseType(inputs) == 'SECURITY_CASE'
+      - name: Has Event Evidence
+        expr: size(caseEventEvidence(inputs)) > 0
+  - isProactiveResponse: false
+    type: actions
+    config:
+      category: response
+      context: case
+      name: Send Case to Webhook
+inputs:
+  type: object
+outputs:
+  type: object
+dsl:
+  name: webhook
+  tasks:
+    - name: webhook_post
+      action: Taegis.Webhook.post
+      inputs: inputs
+type: None

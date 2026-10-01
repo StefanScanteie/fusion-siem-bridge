@@ -1,0 +1,23 @@
+{
+  "alert": {
+    "resource_id": "alert://priv:event-filter:48454:1675951037688:6b389753-f6ba-5bbe-8f70-acd6a9bfd191",
+    "tenant_id": "48454",
+    "type": "alert2",
+    "status": "OPEN",
+    "sensor_types": ["ENDPOINT_TAEGIS"],
+    "attack_technique_ids": ["T1059", "T1059.001"],
+    "metadata": {
+      "title": "PowerSploit Recon Script",
+      "description": "A process event associated with PowerSploit recon.",
+      "severity": 0.99
+    }
+  },
+  "events": {
+    "resource_id": "event://priv:scwx.process:48454:1675951030000:2c0735a1-2c57-52bf-ad8b-a6b0e28ae597",
+    "commandline": "powershell.exe get-httpstatus",
+    "hostname": "WSAMZN-VU5R5RS6",
+    "image_path": "\\Device\\HarddiskVolume1\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "sensor_type": "ENDPOINT_TAEGIS",
+    "username": "scwxdemo\\sscanteie_windowssrv"
+  }
+}

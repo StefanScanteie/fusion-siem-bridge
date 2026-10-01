@@ -19,6 +19,21 @@ def test_ingest_rejects_missing_token(tmp_path):
     assert response.status_code == 401
 
 
+def test_ingest_accepts_token_query_param_for_generic_webhook(tmp_path):
+    client = _client(tmp_path)
+    payload = {
+        "alert": {
+            "resource_id": "alert://t1/det-2",
+            "tenant_id": "t1",
+            "metadata": {"title": "Malware", "severity": 0.9},
+        },
+        "events": [],
+    }
+    response = client.post("/v1/ingest?token=test-token", json=payload)
+    assert response.status_code == 202
+    assert response.json()["idempotency_key"] == "t1:detection:alert://t1/det-2"
+
+
 def test_ingest_accepts_detection_and_writes_jsonl(tmp_path):
     client = _client(tmp_path)
     payload = {
