@@ -1,0 +1,121 @@
+apiVersion: v0.0.1
+kind: Playbook
+name: FusionSIEMCasesToWebhook
+version: 1.0.0
+title: Fusion SIEM — cases to webhook
+description: >
+  On case/investigation create, POST a fusion-siem.v1 JSON document to the
+  fusion-siem-bridge collector. Related event IDs are resolved when present.
+documentation: |
+  ## WARNING
+  Data sent via this playbook leaves the Fusion/Taegis environment and is
+  delivered to the HTTPS URL you configure.
+
+  ## Overview
+  Platform trigger on investigation/case create. Posts the case contract in
+  playbooks/CONTRACT.md to `/v1/ingest`.
+
+  CEL helper names for cases vary by tenant schema (`investigationId`,
+  `caseId`, title, status). Confirm helper names in your Automations editor
+  if import reports unknown functions, then adjust the `detection`-style
+  mappings in `post_webhook`.
+
+  ## Inputs
+  | Input | Required | Description |
+  | --- | --- | --- |
+  | Webhook URL | Yes | Collector URL, including `/v1/ingest` |
+  | Webhook token | Yes | Bearer token, same as `FUSION_SIEM_INGEST_TOKEN` |
+tags:
+  - Category:SIEM
+  - Type:Notification
+connectorCategories:
+  - Generic
+connectors:
+  - Taegis.Event:1.2.0
+  - FusionSIEM.Webhook:1.0.0
+triggerHints:
+  - isProactiveResponse: false
+    type: platform
+    config:
+      events:
+        - create
+      source: investigation
+inputs:
+  properties:
+    configuration:
+      properties:
+        webhook_url:
+          title: Webhook URL
+          type: string
+        webhook_token:
+          title: Webhook token
+          type: string
+      required:
+        - webhook_url
+        - webhook_token
+      type: object
+  type: object
+outputs:
+  properties:
+    outcome:
+      type: string
+  type: object
+dsl:
+  name: Cases to SIEM webhook
+  description: POST fusion-siem.v1 case JSON
+  tasks:
+    - name: collect_event_ids
+      let:
+        ids: >-
+          has(inputs, 'eventIds') ? inputs.eventIds :
+          (has(inputs, 'eventsEvidence') ? inputs.eventsEvidence : [])
+    - name: loop_over_case_events
+      condition: size(collect_event_ids.variables.ids) > 0
+      variables:
+        results: []
+      range: collect_event_ids.variables.ids
+      for:
+        - name: fetch_event_details
+          action: Taegis.Event.resolve
+          retry: 3
+          inputs:
+            id: loop_over_case_events.value
+          let:
+            results: >-
+              loop_over_case_events.variables.results + [{
+                "id": loop_over_case_events.value,
+                "summary": has(fetch_event_details.outputs, 'message') ? fetch_event_details.outputs.message : '',
+                "values": has(fetch_event_details.outputs, 'values') ? fetch_event_details.outputs.values : {}
+              }]
+    - name: post_webhook
+      action: FusionSIEM.Webhook.post
+      retry: 5
+      inputs:
+        webhook_url: inputs.configuration.webhook_url
+        webhook_token: inputs.configuration.webhook_token
+        body:
+          schema: fusion-siem.v1
+          datastream: case
+          tenant_id: TDR.tenant
+          source: playbook
+          case:
+            id: >-
+              has(inputs, 'id') ? inputs.id :
+              (has(inputs, 'investigationId') ? inputs.investigationId : string(inputs))
+            title: >-
+              has(inputs, 'title') ? inputs.title : 'Fusion case'
+            severity: >-
+              has(inputs, 'severity') ? inputs.severity :
+              (has(inputs, 'priority') ? inputs.priority : null)
+            status: >-
+              has(inputs, 'status') ? inputs.status :
+              (has(inputs, 'primaryStatus') ? inputs.primaryStatus : null)
+            url: >-
+              TDR.URL + '/investigations/' + (has(inputs, 'id') ? inputs.id : '')
+          events: >-
+            has(loop_over_case_events, 'variables.results')
+              ? loop_over_case_events.variables.results
+              : []
+      let:
+        outcome: posted
+type: None

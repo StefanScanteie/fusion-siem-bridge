@@ -1,0 +1,14 @@
+{
+  "schema": "fusion-siem.v1",
+  "datastream": "case",
+  "tenant_id": "48454",
+  "source": "playbook",
+  "case": {
+    "id": "investigation://example-tenant/cases/99",
+    "title": "Suspected intrusion",
+    "severity": "HIGH",
+    "status": "OPEN",
+    "url": "https://ctpx.secureworks.com/investigations/99"
+  },
+  "events": []
+}

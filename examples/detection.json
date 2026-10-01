@@ -1,0 +1,29 @@
+{
+  "schema": "fusion-siem.v1",
+  "datastream": "detection",
+  "tenant_id": "48454",
+  "source": "playbook",
+  "detection": {
+    "id": "alert://example-tenant:example-detector:1",
+    "title": "Suspicious PowerShell activity",
+    "description": "Encoded PowerShell command on FINANCE-LAPTOP-07",
+    "severity": 0.8,
+    "status": "OPEN",
+    "sensor_types": ["ENDPOINT_TAEGIS"],
+    "attack_technique_ids": ["T1059.001"],
+    "url": "https://ctpx.secureworks.com/alerts/alert://example-tenant:example-detector:1"
+  },
+  "events": [
+    {
+      "id": "event://example-tenant/process/abc",
+      "event_type": "PROCESS",
+      "summary": "powershell.exe -enc AA==",
+      "event_time": "2026-09-04T22:10:44.929917Z",
+      "values": {
+        "hostname": "FINANCE-LAPTOP-07",
+        "image_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "commandline": "powershell.exe -enc AA=="
+      }
+    }
+  ]
+}
