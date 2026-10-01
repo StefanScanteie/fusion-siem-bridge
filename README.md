@@ -1,6 +1,6 @@
 # fusion-siem-bridge
 
-Middleware plus Fusion Automations playbooks that export **detections**, **related events**, and **cases** from Sophos Fusion (Taegis XDR) to a SIEM.
+Middleware plus Fusion Automations playbooks that export **detections**, **related events**, and **cases** from Sophos Fusion (Sophos XDR powered by Secureworks) to a SIEM.
 
 Fusion playbooks can only POST HTTPS. They cannot talk Splunk HEC, Sentinel, or syslog directly. This collector is the “any SIEM” side: it accepts the Fusion webhook JSON those playbooks POST, normalizes it to a stable `fusion-siem.v1` envelope, writes that envelope locally, and optionally forwards it to another HTTP collector.
 
